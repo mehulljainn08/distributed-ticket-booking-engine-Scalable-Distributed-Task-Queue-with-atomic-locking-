@@ -1,0 +1,14 @@
+# Node.js
+node_modules/
+.env
+
+# Go
+/orchestrator-go/ticket-orchestrator
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Docker
+.docker/
