@@ -1,0 +1,108 @@
+/* ── Live Traffic Bar ───────────────────────────────────────────── */
+.live-traffic {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 0 var(--space-5);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  animation: slide-up 0.5s 0.1s var(--ease-snap) both;
+}
+
+/* ── Stat cell ── */
+.lt-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: var(--space-4) var(--space-5);
+  flex: 1;
+  min-width: 0;
+}
+
+.lt-stat--users {
+  background: rgba(79, 142, 247, 0.04);
+}
+
+.lt-stat__icon {
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+.lt-stat__value {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.4rem;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  line-height: 1;
+  animation: counter-up 0.3s var(--ease-snap) forwards;
+}
+
+.lt-stat__value--sm  { font-size: 1rem; }
+.lt-stat__value--green { color: var(--seat-available); }
+
+.lt-stat__label {
+  font-size: 0.65rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* ── Live badge ── */
+.lt-live-badge {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: rgba(244, 63, 94, 0.12);
+  border: 1px solid rgba(244, 63, 94, 0.25);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: #fb7185;
+}
+
+.lt-live-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #f43f5e;
+  animation: pulse-dot 1s ease-in-out infinite;
+}
+
+/* ── Demand badge ── */
+.lt-demand {
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.lt-demand--moderate { color: var(--seat-available); }
+.lt-demand--high     { color: var(--accent); }
+.lt-demand--critical { color: #f43f5e; animation: pulse-dot 1.5s ease-in-out infinite; }
+
+/* ── Divider ── */
+.lt-divider {
+  width: 1px;
+  height: 40px;
+  background: var(--border-faint);
+  flex-shrink: 0;
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .live-traffic {
+    overflow-x: auto;
+    justify-content: flex-start;
+    gap: 0;
+    padding: 0 var(--space-4);
+  }
+
+  .lt-stat { min-width: 90px; }
+}
