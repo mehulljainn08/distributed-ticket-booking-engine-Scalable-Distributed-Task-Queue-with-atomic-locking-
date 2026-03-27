@@ -3,7 +3,7 @@
 
 A production-inspired distributed system designed to handle massive concurrent booking requests (e.g., IRCTC Tatkal, BookMyShow flash sales) without race conditions or double bookings.
 
-Built using **Go, Node.js, Redis, MongoDB, and Docker**.
+Built using **Go, Node.js, Redis, PostgreSQL, and Docker**.
 
 ---
 
@@ -57,8 +57,8 @@ The system is composed of **5 independent microservices**:
 
 ---
 
-### 4. Database & Webhook Service (Node.js + MongoDB)
-- Stores final booking results
+### 4. Database & Webhook Service (Node.js + PostgreSQL)
+- Stores final booking results in PostgreSQL
 - Handles success/failure states
 - Sends webhook events back to clients
 
@@ -110,7 +110,7 @@ The system is composed of **5 independent microservices**:
 | Orchestration    | Go               |
 | Queue & Locking  | Redis            |
 | Workers          | Node.js          |
-| Database         | MongoDB          |
+| Database         | PostgreSQL       |
 | Containerization | Docker           |
 
 ---
@@ -119,7 +119,7 @@ The system is composed of **5 independent microservices**:
 
 ### 1. Clone the Repository
 ```bash
-https://github.com/mehulljainn08/distributed-ticket-booking-engine-Scalable-Distributed-Task-Queue-with-atomic-locking-
+git clone https://github.com/your-username/distributed-ticket-booking-engine.git
 cd distributed-ticket-booking-engine
 
 ### 2. Start Infrastructure (Redis + MongoDB)
