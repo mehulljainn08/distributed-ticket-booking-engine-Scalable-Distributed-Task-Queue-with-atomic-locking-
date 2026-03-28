@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sync"
+	"net/http"
+	"os"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -17,8 +19,8 @@ type BookingRequest struct {
 	Timestamp int64  `json:"timestamp"`
 }
 
-func acquireLock(ctx context.Context, client *redis.Client, seatID string, userID string) bool {
-	key := "lock:seat:" + seatID
+func acquireLock(ctx context.Context, client *redis.Client, seatID string, userID string, eventID string) bool {
+	key := "lock:event:" + eventID + ":seat:" + seatID
 	success, err := client.SetNX(ctx, key, userID, 10*time.Second).Result()
 	if err != nil {
 		fmt.Println("Error acquiring lock:", err)
@@ -42,48 +44,97 @@ func enqueueBooking(ctx context.Context, client *redis.Client, req BookingReques
 	}
 	return nil
 }
-func main() {
-	ctx := context.Background()
-	client := redis.NewClient(&redis.Options{
-		Addr: "localhost:6379",
-	})
-	var wg sync.WaitGroup
 
-	targetSeat := "A1"
-	eventID := "event_123"
+func releaseLock(ctx context.Context, client *redis.Client, seatID string, userID string, eventID string) error {
+	key := "lock:event:" + eventID + ":seat:" + seatID
 
-	fmt.Println(" Starting Flash Sale Simulation...")
-	wg.Add(5)
-	for i := 1; i <= 5; i++ {
+	script := `
+        if redis.call("get", KEYS[1]) == ARGV[1] then
+            return redis.call("del", KEYS[1])
+        else
+            return 0
+        end
+    `
 
-		id := fmt.Sprintf("user_%d", i)
-
-		go func(uID string) {
-
-			defer wg.Done()
-			if acquireLock(ctx, client, targetSeat, uID) {
-				fmt.Printf("[SUCCESS] %s got the lock for %s\n", uID, targetSeat)
-
-				req := BookingRequest{
-					UserID:    uID,
-					SeatID:    targetSeat,
-					EventID:   eventID,
-					Timestamp: time.Now().Unix(),
-				}
-
-				if err := enqueueBooking(ctx, client, req); err != nil {
-					fmt.Printf("[ERROR] %s failed to queue: %v\n", uID, err)
-				} else {
-					fmt.Printf("[QUEUED] %s is in the line for %s\n", uID, targetSeat)
-				}
-			} else {
-				fmt.Printf("[REJECTED] %s - Seat %s already taken\n", uID, targetSeat)
-			}
-
-		}(id)
-
+	result, err := client.Eval(ctx, script, []string{key}, userID).Result()
+	if err != nil {
+		return err
 	}
 
-	wg.Wait()
-	fmt.Println("Simulation Complete.")
+	// If result is 0, the lock didn't exist or belonged to someone else
+	if result.(int64) == 0 {
+		return fmt.Errorf("lock not found or unauthorized to release")
+	}
+
+	return nil
+}
+
+func main() {
+
+	redisAddr := os.Getenv("REDIS_ADDR")
+	if redisAddr == "" {
+		redisAddr = "localhost:6379"
+	}
+
+	client := redis.NewClient(&redis.Options{
+		Addr: redisAddr,
+	})
+
+	router := gin.Default()
+
+	router.POST("/book", func(c *gin.Context) {
+		var req BookingRequest
+
+		err := c.ShouldBindJSON(&req)
+
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		ctx := context.Background()
+
+		lockAcquired := acquireLock(ctx, client, req.SeatID, req.UserID, req.EventID)
+
+		if !lockAcquired {
+			c.JSON(http.StatusConflict, gin.H{"error": fmt.Sprintf("Seat %s for event %s is already booked", req.SeatID, req.EventID)})
+			return
+		}
+
+		timeStamp := time.Now().Unix()
+		req.Timestamp = timeStamp
+		pushToqueue := enqueueBooking(ctx, client, req)
+		if pushToqueue != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to enqueue booking request: %v", pushToqueue)})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("Booking request for seat %s for event %s enqueued successfully", req.SeatID, req.EventID)})
+
+	})
+
+	router.POST("/release", func(c *gin.Context) {
+		var req BookingRequest
+
+		err := c.ShouldBindJSON(&req)
+
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		ctx := context.Background()
+
+		err = releaseLock(ctx, client, req.SeatID, req.UserID, req.EventID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to release lock: %v", err)})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("Booking request for seat %s for event %s released successfully", req.SeatID, req.EventID)})
+
+	})
+
+	fmt.Println("Go Orchestrator running on http://localhost:8080")
+	router.Run(":8080")
+
 }
