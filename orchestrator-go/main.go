@@ -4,30 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
 )
-
-func init() {
-	envPath := filepath.Join("..", ".env")
-	if err := godotenv.Load(envPath); err != nil {
-		log.Printf("warning: could not load %s: %v", envPath, err)
-	}
-}
-
-func getEnv(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
-}
 
 type BookingRequest struct {
 	UserID    string `json:"user_id"`
@@ -78,7 +61,6 @@ func releaseLock(ctx context.Context, client *redis.Client, seatID string, userI
 		return err
 	}
 
-	// If result is 0, the lock didn't exist or belonged to someone else
 	if result.(int64) == 0 {
 		return fmt.Errorf("lock not found or unauthorized to release")
 	}
@@ -88,9 +70,23 @@ func releaseLock(ctx context.Context, client *redis.Client, seatID string, userI
 
 func main() {
 
+	Addr := os.Getenv("REDIS_ADDR")
+	Password := os.Getenv("REDIS_PASSWORD")
+	if Addr == "" {
+		Addr = "localhost:6379"
+	}
+	if Password == "" {
+		Password = ""
+	}
 	client := redis.NewClient(&redis.Options{
-		Addr:     getEnv("REDIS_ADDR", "localhost:6379"),
-		Password: getEnv("REDIS_PASSWORD", ""),
+		Addr:         Addr,
+		Password:     Password,
+		DB:           0,
+		DialTimeout:  5 * time.Second,
+		ReadTimeout:  3 * time.Second,
+		WriteTimeout: 3 * time.Second,
+		PoolSize:     10,
+		MinIdleConns: 5,
 	})
 
 	router := gin.Default()
@@ -105,7 +101,7 @@ func main() {
 			return
 		}
 
-		ctx := context.Background()
+		ctx := c.Request.Context()
 
 		lockAcquired := acquireLock(ctx, client, req.SeatID, req.UserID, req.EventID)
 
@@ -116,9 +112,10 @@ func main() {
 
 		timeStamp := time.Now().Unix()
 		req.Timestamp = timeStamp
-		pushToqueue := enqueueBooking(ctx, client, req)
-		if pushToqueue != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to enqueue booking request: %v", pushToqueue)})
+		pushToQueue := enqueueBooking(ctx, client, req)
+		if pushToQueue != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to enqueue booking request: %v", pushToQueue)})
+			releaseLock(ctx, client, req.SeatID, req.UserID, req.EventID)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("Booking request for seat %s for event %s enqueued successfully", req.SeatID, req.EventID)})
@@ -135,7 +132,7 @@ func main() {
 			return
 		}
 
-		ctx := context.Background()
+		ctx := c.Request.Context()
 
 		err = releaseLock(ctx, client, req.SeatID, req.UserID, req.EventID)
 		if err != nil {
@@ -147,7 +144,11 @@ func main() {
 
 	})
 
-	port := getEnv("ORCHESTRATOR_PORT", "8080")
+	port := os.Getenv("ORCHESTRATOR_PORT")
+
+	if port == "" {
+		port = "8080"
+	}
 	fmt.Println("Go Orchestrator running on http://localhost:" + port)
 	router.Run(":" + port)
 
