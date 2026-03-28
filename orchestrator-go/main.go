@@ -4,13 +4,30 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
 )
+
+func init() {
+	envPath := filepath.Join("..", ".env")
+	if err := godotenv.Load(envPath); err != nil {
+		log.Printf("warning: could not load %s: %v", envPath, err)
+	}
+}
+
+func getEnv(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
 
 type BookingRequest struct {
 	UserID    string `json:"user_id"`
@@ -71,13 +88,9 @@ func releaseLock(ctx context.Context, client *redis.Client, seatID string, userI
 
 func main() {
 
-	redisAddr := os.Getenv("REDIS_ADDR")
-	if redisAddr == "" {
-		redisAddr = "localhost:6379"
-	}
-
 	client := redis.NewClient(&redis.Options{
-		Addr: redisAddr,
+		Addr:     getEnv("REDIS_ADDR", "localhost:6379"),
+		Password: getEnv("REDIS_PASSWORD", ""),
 	})
 
 	router := gin.Default()
@@ -134,7 +147,8 @@ func main() {
 
 	})
 
-	fmt.Println("Go Orchestrator running on http://localhost:8080")
-	router.Run(":8080")
+	port := getEnv("ORCHESTRATOR_PORT", "8080")
+	fmt.Println("Go Orchestrator running on http://localhost:" + port)
+	router.Run(":" + port)
 
 }

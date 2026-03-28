@@ -1,0 +1,19 @@
+name: Backend-Pipeline
+
+on:
+  pull_request:
+    branches: ["testing"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: copy-code
+        uses:
+
+      - name: setup-orchestrator
+        uses:
+
+      - name: setup-worker
+        uses:
