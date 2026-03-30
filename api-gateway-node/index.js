@@ -1,15 +1,9 @@
 const express = require("express");
-const Redis = require("ioredis");
+const axios = require("axios");
 const { v4: uuidv4 } = require("uuid");
 
 const app = express();
 app.use(express.json());
-
-// Redis connection
-const redis = new Redis({
-  host: "localhost",
-  port: 6379
-});
 
 // Health check route
 app.get("/", (req, res) => {
@@ -19,38 +13,43 @@ app.get("/", (req, res) => {
 // Main booking route
 app.post("/book-ticket", async (req, res) => {
   try {
-    const { seatId, userId } = req.body;
+    const { seatId, userId, eventId } = req.body;
 
     // Validation
-    if (!seatId || !userId) {
+    if (!seatId || !userId || !eventId) {
       return res.status(400).json({
-        error: "seatId and userId are required"
+        error: "seatId, userId and eventId are required"
       });
     }
 
     // Generate unique waitlist ID
     const waitlistId = uuidv4();
 
-    // Create booking request
-    const bookingRequest = {
-      waitlistId,
-      seatId,
-      userId,
-      status: "PENDING",
-      timestamp: new Date()
-    };
-
-    // Push to Redis queue
-    await redis.lpush("ticketQueue", JSON.stringify(bookingRequest));
-
-    // Immediate response (IMPORTANT)
-    return res.status(202).json({
-      message: "Request added to queue",
-      waitlistId
+    // Call Go Orchestrator
+    const response = await axios.post("http://localhost:8080/book", {
+      user_id: userId,
+      seat_id: seatId,
+      event_id: eventId
     });
 
+    // If Go returns success
+    if (response.status === 202) {
+      return res.status(202).json({
+        message: "Request accepted and queued",
+        waitlistId
+      });
+    }
+
   } catch (err) {
-    console.error(err);
+    console.error("Error:", err.message);
+
+    // If seat already taken
+    if (err.response && err.response.status === 409) {
+      return res.status(409).json({
+        error: "Seat already booked"
+      });
+    }
+
     return res.status(500).json({
       error: "Internal server error"
     });
