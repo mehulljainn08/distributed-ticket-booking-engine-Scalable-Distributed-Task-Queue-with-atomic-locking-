@@ -119,7 +119,7 @@ The system is composed of **5 independent microservices**:
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/your-username/distributed-ticket-booking-engine.git
+https://github.com/mehulljainn08/distributed-ticket-booking-engine-Scalable-Distributed-Task-Queue-with-atomic-locking-
 cd distributed-ticket-booking-engine
 
 ### 2. Start Infrastructure (Redis + MongoDB)
