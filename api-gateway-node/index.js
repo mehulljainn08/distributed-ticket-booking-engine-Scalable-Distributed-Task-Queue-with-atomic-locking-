@@ -1,10 +1,15 @@
 const express = require("express");
 const axios = require("axios");
 const { v4: uuidv4 } = require("uuid");
+const cors = require("cors")
 
 const app = express();
+
+app.use(cors());
 app.use(express.json());
 
+const ORCHESTRATOR_URL = process.env.ORCHESTRATOR_URL || "http://localhost:8080";
+const PORT = process.env.PORT || 3000;
 // Health check route
 app.get("/", (req, res) => {
   res.send("API Gateway is running 🚀");
@@ -26,15 +31,15 @@ app.post("/book-ticket", async (req, res) => {
     const waitlistId = uuidv4();
 
     // Call Go Orchestrator
-    const response = await axios.post("http://localhost:8080/book", {
+    const response = await axios.post(`${ORCHESTRATOR_URL}/book`, {
       user_id: userId,
       seat_id: seatId,
       event_id: eventId
     });
 
     // If Go returns success
-    if (response.status === 202) {
-      return res.status(202).json({
+    if (response.status === 200) {
+      return res.status(200).json({
         message: "Request accepted and queued",
         waitlistId
       });
@@ -57,6 +62,6 @@ app.post("/book-ticket", async (req, res) => {
 });
 
 // Start server
-app.listen(3000, () => {
-  console.log("API Gateway running on port 3000");
+app.listen(PORT, () => {
+  console.log(`API Gateway running on port ${PORT}`);
 });
