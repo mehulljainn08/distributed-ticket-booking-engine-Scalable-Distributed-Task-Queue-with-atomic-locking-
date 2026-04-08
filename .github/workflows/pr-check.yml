@@ -1,0 +1,47 @@
+name: Backend-Pipeline
+
+on:
+  pull_request:
+    branches: ["testing"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      REDIS_ADDR: localhost:6379
+      REDIS_PASSWORD: ""
+      REDIS_DB: 0
+      ORCHESTRATOR_PORT: 8080
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Install orchestrator dependencies
+        working-directory: ./orchestrator-go
+        run: go mod download
+
+      - name: Build orchestrator
+        working-directory: ./orchestrator-go
+        run: go build -o orchestrator .
+
+      - name: Verify orchestrator binary
+        working-directory: ./orchestrator-go
+        run: ls -la orchestrator

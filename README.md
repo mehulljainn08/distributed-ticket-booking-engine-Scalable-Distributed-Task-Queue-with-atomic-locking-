@@ -3,7 +3,11 @@
 
 A production-inspired distributed system designed to handle massive concurrent booking requests (e.g., IRCTC Tatkal, BookMyShow flash sales) without race conditions or double bookings.
 
+<<<<<<< yash-week2
+Built using **Go, Node.js, Redis, Postgres, and Docker**.
+=======
 Built using **Go, Node.js, Redis, PostgreSQL, and Docker**.
+>>>>>>> main
 
 ---
 
@@ -57,8 +61,13 @@ The system is composed of **5 independent microservices**:
 
 ---
 
+<<<<<<< yash-week2
+### 4. Database & Webhook Service (Node.js + Postgres)
+- Stores final booking results
+=======
 ### 4. Database & Webhook Service (Node.js + PostgreSQL)
 - Stores final booking results in PostgreSQL
+>>>>>>> main
 - Handles success/failure states
 - Sends webhook events back to clients
 
@@ -104,13 +113,17 @@ The system is composed of **5 independent microservices**:
 
 ## ⚙️ Tech Stack
 
-| Layer            | Technology        |
+| Layer            | Technology       |
 |------------------|------------------|
 | API Layer        | Node.js, Express |
 | Orchestration    | Go               |
 | Queue & Locking  | Redis            |
 | Workers          | Node.js          |
+<<<<<<< yash-week2
+| Database         | Postgres         |
+=======
 | Database         | PostgreSQL       |
+>>>>>>> main
 | Containerization | Docker           |
 
 ---
