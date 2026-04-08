@@ -37,9 +37,9 @@ app.post("/book-ticket", async (req, res) => {
       event_id: eventId
     });
 
-    // If Go returns success
-    if (response.status === 200) {
-      return res.status(200).json({
+    // If Go returns success (checking broader 200-299 to allow 202 Accepted)
+    if (response.status >= 200 && response.status < 300) {
+      return res.status(202).json({
         message: "Request accepted and queued",
         waitlistId
       });

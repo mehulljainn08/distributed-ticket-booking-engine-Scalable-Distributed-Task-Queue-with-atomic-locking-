@@ -36,29 +36,37 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000
  * @returns {Promise<{ waitlistId: string, position: number, estimatedTime: number, timestamp: string }>}
  */
 export async function submitBookingRequest(payload) {
-  // ── FUTURE: uncomment when API Gateway is live ─────────────────────────────
-  //
-  // const response = await fetch(`${API_BASE_URL}/book-ticket`, {
-  //   method: 'POST',
-  //   headers: {
-  //     'Content-Type': 'application/json',
-  //     'X-Request-ID': crypto.randomUUID(),          // Idempotency key
-  //     'X-Client-Version': '1.0.0',
-  //   },
-  //   body: JSON.stringify(payload),
-  //   signal: AbortSignal.timeout(10_000),             // 10s timeout
-  // });
-  //
-  // if (!response.ok) {
-  //   const error = await response.json().catch(() => ({}));
-  //   throw new APIError(response.status, error.message || 'Booking request failed');
-  // }
-  //
-  // return response.json();
-  //
-  // ──────────────────────────────────────────────────────────────────────────
-
-  return _mockSubmitBooking(payload);
+  const { eventId, userId, seats, timestamp } = payload;
+  
+  const requests = seats.map(seatId => {
+    return fetch(`${API_BASE_URL}/book-ticket`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Request-ID': crypto.randomUUID(),          // Idempotency key
+        'X-Client-Version': '1.0.0',
+      },
+      body: JSON.stringify({ eventId, userId, seatId, timestamp }),
+      signal: AbortSignal.timeout(10_000),             // 10s timeout
+    }).then(async (res) => {
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new APIError(res.status, err.message || 'Booking Request failed');
+      }
+      return res.json();
+    });
+  });
+  
+  const results = await Promise.all(requests);
+  
+  // For WaitlistModal, aggregate into a single object representation:
+  return {
+    waitlistId: results.length > 1 ? `${results[0].waitlistId} (+${results.length - 1} more)` : results[0].waitlistId,
+    position: results[0]?.position || 0,
+    estimatedTime: results[0]?.estimatedTime || 0,
+    workerNode: results[0]?.workerNode || 'various',
+    redisLockAcquired: true,
+  };
 }
 
 /**
@@ -127,10 +135,11 @@ async function _mockSubmitBooking(payload) {
     throw new APIError(503, 'Worker queue at capacity. Please retry in a moment.');
   }
 
-  const waitlistId = `WL-${Date.now().toString(36).toUpperCase().slice(-6)}`;
+  const waitlistIds = payload.seats.map((_, i) => `WL-${Date.now().toString(36).toUpperCase().slice(-6)}-${i}`);
+  const displayId = waitlistIds.length > 1 ? `${waitlistIds[0]} (+${waitlistIds.length - 1} more)` : waitlistIds[0];
 
   return {
-    waitlistId,
+    waitlistId: displayId,
     position:      Math.floor(Math.random() * 120) + 10,
     estimatedTime: Math.floor(Math.random() * 20)  + 8,   // seconds
     seatCount:     payload.seats.length,

@@ -14,7 +14,7 @@ const testJob = {
 };
 
 async function pushTestJob() {
-  await redis.lpush("queue:pending_bookings", JSON.stringify(testJob));
+  await redis.rpush("queue:pending_bookings", JSON.stringify(testJob));
   console.log("✅ Test job pushed:", testJob);
   redis.disconnect();
 }
