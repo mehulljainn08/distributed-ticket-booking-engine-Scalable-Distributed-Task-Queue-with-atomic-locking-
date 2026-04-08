@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -19,30 +20,33 @@ type BookingRequest struct {
 	Timestamp int64  `json:"timestamp"`
 }
 
-func acquireLock(ctx context.Context, client *redis.Client, seatID string, userID string, eventID string) bool {
-	key := "lock:event:" + eventID + ":seat:" + seatID
-	success, err := client.SetNX(ctx, key, userID, 10*time.Second).Result()
+func lockAndEnqueue(ctx context.Context, client *redis.Client, req BookingRequest) (bool, error) {
+	script := `
+		if redis.call("setnx", KEYS[1], ARGV[1]) == 1 then
+			redis.call("expire", KEYS[1], 30)
+			redis.call("rpush", "queue:pending_bookings", ARGV[2])
+			return 1
+		else
+			return 0
+		end
+		`
+	JSON_req, err := json.Marshal(req)
 	if err != nil {
-		fmt.Println("Error acquiring lock:", err)
-		return false
+		return false, err
 	}
-
-	return success
-
-}
-
-func enqueueBooking(ctx context.Context, client *redis.Client, req BookingRequest) error {
-
-	jsonData, err := json.Marshal(req)
-
+	result, err := client.Eval(ctx, script, []string{"lock:event:" + req.EventID + ":seat:" + req.SeatID}, req.UserID, string(JSON_req)).Result()
 	if err != nil {
-		return fmt.Errorf("failed to marshal booking request: %v", err)
+		return false, err
 	}
-	err = client.RPush(ctx, "queue:pending_bookings", jsonData).Err()
-	if err != nil {
-		return fmt.Errorf("failed to enqueue booking request: %v", err)
+	val, ok := result.(int64)
+	if !ok {
+		return false, fmt.Errorf("lock not found or unauthorized to release")
 	}
-	return nil
+	if val == 1 {
+		return true, nil
+	} else {
+		return false, nil
+	}
 }
 
 func releaseLock(ctx context.Context, client *redis.Client, seatID string, userID string, eventID string) error {
@@ -61,7 +65,8 @@ func releaseLock(ctx context.Context, client *redis.Client, seatID string, userI
 		return err
 	}
 
-	if result.(int64) == 0 {
+	val, ok := result.(int64)
+	if !ok || val == 0 {
 		return fmt.Errorf("lock not found or unauthorized to release")
 	}
 
@@ -70,6 +75,10 @@ func releaseLock(ctx context.Context, client *redis.Client, seatID string, userI
 
 func main() {
 
+	env := godotenv.Load()
+	if env != nil {
+		fmt.Println("Error loading .env file")
+	}
 	Addr := os.Getenv("REDIS_ADDR")
 	Password := os.Getenv("REDIS_PASSWORD")
 	if Addr == "" {
@@ -85,8 +94,8 @@ func main() {
 		DialTimeout:  5 * time.Second,
 		ReadTimeout:  3 * time.Second,
 		WriteTimeout: 3 * time.Second,
-		PoolSize:     10,
-		MinIdleConns: 5,
+		PoolSize:     50,
+		MinIdleConns: 10,
 	})
 
 	router := gin.Default()
@@ -103,22 +112,16 @@ func main() {
 
 		ctx := c.Request.Context()
 
-		lockAcquired := acquireLock(ctx, client, req.SeatID, req.UserID, req.EventID)
-
+		lockAcquired, err := lockAndEnqueue(ctx, client, req)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to acquire lock: %v", err)})
+			return
+		}
 		if !lockAcquired {
 			c.JSON(http.StatusConflict, gin.H{"error": fmt.Sprintf("Seat %s for event %s is already booked", req.SeatID, req.EventID)})
 			return
 		}
-
-		timeStamp := time.Now().Unix()
-		req.Timestamp = timeStamp
-		pushToQueue := enqueueBooking(ctx, client, req)
-		if pushToQueue != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to enqueue booking request: %v", pushToQueue)})
-			releaseLock(ctx, client, req.SeatID, req.UserID, req.EventID)
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("Booking request for seat %s for event %s enqueued successfully", req.SeatID, req.EventID)})
+		c.JSON(http.StatusAccepted, gin.H{"message": fmt.Sprintf("Booking request for seat %s for event %s enqueued successfully", req.SeatID, req.EventID)})
 
 	})
 

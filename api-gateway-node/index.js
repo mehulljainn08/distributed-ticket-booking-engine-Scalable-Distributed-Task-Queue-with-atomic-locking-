@@ -31,9 +31,13 @@ app.post("/book-ticket", async (req, res) => {
             return res.status(400).json({ error: "Invalid seat IDs", invalidSeats });
         }
 
-        // 🔵 PROCESS EACH SEAT
-        const acceptedSeats = [];
-        const failedSeats = [];
+    // If Go returns success (checking broader 200-299 to allow 202 Accepted)
+    if (response.status >= 200 && response.status < 300) {
+      return res.status(202).json({
+        message: "Request accepted and queued",
+        waitlistId
+      });
+    }
 
         const requests = seats.map(async (seat) => {
             try {
