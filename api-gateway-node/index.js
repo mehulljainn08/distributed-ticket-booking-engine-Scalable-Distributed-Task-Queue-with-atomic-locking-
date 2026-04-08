@@ -4,7 +4,7 @@ const axios = require("axios");
 const app = express();
 app.use(express.json());
 
-const ORCHESTRATOR_URL = "http://localhost:8080/book";
+const ORCHESTRATOR_URL = process.env.ORCHESTRATOR_URL || "http://localhost:8080";
 
 // Health Check
 app.get("/health", (req, res) => {
@@ -31,20 +31,14 @@ app.post("/book-ticket", async (req, res) => {
             return res.status(400).json({ error: "Invalid seat IDs", invalidSeats });
         }
 
-    // If Go returns success (checking broader 200-299 to allow 202 Accepted)
-    if (response.status >= 200 && response.status < 300) {
-      return res.status(202).json({
-        message: "Request accepted and queued",
-        waitlistId
-      });
-    }
-
+        const acceptedSeats = [];
+        const failedSeats = [];
         const requests = seats.map(async (seat) => {
             try {
-                await axios.post(ORCHESTRATOR_URL, {
-                    seatId: seat,
-                    userId,
-                    eventId
+                await axios.post(`${ORCHESTRATOR_URL}/book`, {
+                    seat_id: seat,
+                    user_id: userId,
+                    event_id: eventId
                 });
                 acceptedSeats.push(seat);
             } catch (err) {
@@ -70,6 +64,7 @@ app.post("/book-ticket", async (req, res) => {
     }
 });
 
-app.listen(3000, () => {
-    console.log("API Gateway running on port 3000");
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`API Gateway running on port ${PORT}`);
 });
