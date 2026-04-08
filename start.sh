@@ -9,7 +9,7 @@ echo "🚀 Starting Distributed Ticket Booking Engine..."
 # 1. Start Docker Containers (Postgres, Redis, Go Orchestrator, LB, Gateways)
 echo "📦 Starting Docker containers (Postgres, Redis, Load Balancer, Gateways, Core Orchestrator)..."
 echo "🧱 Scaling out to 3 API Gateways and 3 Orchestrators to simulate a distributed load..."
-docker-compose up -d --scale api-gateway=3 --scale orchestrator=3
+docker-compose up -d --scale api-gateway=3 --scale orchestrator=3 --scale worker-node=10
 
 # 2. Wait for dependencies to initialize
 echo "⏳ Waiting 5 seconds for services to start..."
